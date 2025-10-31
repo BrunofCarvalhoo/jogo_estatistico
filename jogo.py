@@ -32,6 +32,9 @@ SMALL_FONT = pygame.font.SysFont('Arial', 16)
 VALUE_FONT = pygame.font.SysFont('Arial', 18, bold=True)
 SCORE_FONT = pygame.font.SysFont('Impact', 60)
 FLOATING_FONT = pygame.font.SysFont('Arial', 24, bold=True)
+QUESTION_FONT = pygame.font.SysFont('Arial', 26, bold=True)
+OPTION_FONT = pygame.font.SysFont('Arial', 22)
+
 
 ROWS = 12  
 BINS = ROWS + 1 
@@ -47,12 +50,48 @@ BIN_VALUES = [
     10000, 5000, 2000, 1000, 500, 10, 1, 10, 500, 1000, 2000, 5000, 10000
 ]
 
+# --- Variáveis de Jogo ---
 bin_counts = [0] * BINS
 total_balls = 0
 total_score = 0 
 balls = [] 
 pegs = []  
-floating_scores = [] 
+floating_scores = []
+option_rects = [] # Para detectar cliques nas opções
+
+# --- Perguntas ---
+questions = [
+    {
+        "question": "Qual é a capital do estado do Amazonas?",
+        "options": ["Manaus", "Belém", "Rio Branco", "Porto Velho"],
+        "correct": 0
+    },
+    {
+        "question": "Qual estado brasileiro é conhecido como a 'Terra da Garoa'?",
+        "options": ["Rio de Janeiro", "Minas Gerais", "São Paulo", "Paraná"],
+        "correct": 2
+    },
+    {
+        "question": "Onde estão localizadas as Cataratas do Iguaçu?",
+        "options": ["Santa Catarina", "Paraná", "Mato Grosso do Sul", "Rio Grande do Sul"],
+        "correct": 1
+    },
+    {
+        "question": "Qual é o maior estado do Brasil em área territorial?",
+        "options": ["Minas Gerais", "Bahia", "Pará", "Amazonas"],
+        "correct": 3
+    },
+    {
+        "question": "Qual destes estados NÃO faz parte da Região Nordeste?",
+        "options": ["Bahia", "Ceará", "Maranhão", "Espírito Santo"],
+        "correct": 3
+    }
+]
+random.shuffle(questions) # Embaralha as perguntas
+
+# --- Estado do Jogo ---
+game_state = "ASKING" # "ASKING", "DROPPING", "GAME_OVER"
+current_question_index = 0
 
 
 def calculate_theoretical_dist(n, total):
@@ -86,10 +125,12 @@ def draw_text(text, font, color, x, y, center=False, center_y=False):
 
 
 class FloatingScore:
-    def __init__(self, x, y, value):
+    # Modificado para aceitar 'is_correct'
+    def __init__(self, x, y, value, is_correct):
         self.x = x
         self.y = y
         self.value = value
+        self.is_correct = is_correct # Salva se foi de uma resposta correta
         self.alpha = 255 
         self.vy = -2     
 
@@ -101,16 +142,26 @@ class FloatingScore:
 
     def draw(self):
         if self.alpha > 0:
-            color = GREEN if self.value > 10 else WHITE 
-            if self.value >= 1000: color = GOLD
+            text = ""
+            color = WHITE
+            
+            # Define o texto e a cor baseado se foi acerto ou erro
+            if self.is_correct:
+                color = GREEN if self.value > 10 else WHITE 
+                if self.value >= 1000: color = GOLD
+                text = f"+ R$ {self.value:,}"
+            else:
+                color = RED
+                text = f"- R$ {self.value:,}"
                 
-            s = FLOATING_FONT.render(f"+ R$ {self.value:,}", True, color)
+            s = FLOATING_FONT.render(text, True, color)
             s.set_alpha(self.alpha)
             screen.blit(s, (self.x - s.get_width() // 2, self.y - s.get_height() // 2))
 
 
 class Ball:
-    def __init__(self):
+    # Modificado para aceitar 'is_correct'
+    def __init__(self, is_correct):
         self.x = GAME_WIDTH // 2 + random.randint(-5, 5) 
         self.y = START_Y
         self.vy = 0
@@ -118,7 +169,8 @@ class Ball:
         self.current_row = 0 
         self.target_peg_y = pegs[0][0][1] 
         self.active = True
-        self.color = GOLD
+        self.is_correct = is_correct # Salva o status da resposta
+        self.color = GREEN if is_correct else RED # Define a cor da bola
 
     def update(self):
         if not self.active:
@@ -166,8 +218,15 @@ class Ball:
                 
                 
                 value_won = BIN_VALUES[bin_index]
-                total_score += value_won
-                floating_scores.append(FloatingScore(self.x, self.y - 20, value_won))
+                
+                # --- LÓGICA DE PONTUAÇÃO MODIFICADA ---
+                if self.is_correct:
+                    total_score += value_won
+                    floating_scores.append(FloatingScore(self.x, self.y - 20, value_won, is_correct=True))
+                else:
+                    total_score -= value_won
+                    floating_scores.append(FloatingScore(self.x, self.y - 20, value_won, is_correct=False))
+                # --- FIM DA LÓGICA MODIFICADA ---
 
 
     def draw(self):
@@ -175,6 +234,55 @@ class Ball:
         pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), BALL_RADIUS)
         pygame.draw.circle(screen, WHITE, (int(self.x) - 2, int(self.y) - 2), int(BALL_RADIUS // 2.5))
 
+
+# --- NOVA FUNÇÃO ---
+def draw_question_panel():
+    global option_rects
+    option_rects.clear()
+    
+    # Cria uma sobreposição escura semi-transparente
+    overlay = pygame.Surface((GAME_WIDTH, HEIGHT))
+    overlay.set_alpha(200) # Nível de transparência
+    overlay.fill(BG_COLOR)
+    screen.blit(overlay, (0, 0))
+    
+    # Desenha a caixa da pergunta
+    box_rect = pygame.Rect(GAME_WIDTH // 4 - 50, HEIGHT // 4, GAME_WIDTH // 2 + 100, HEIGHT // 2 + 50)
+    pygame.draw.rect(screen, LIGHT_GRAY, box_rect, border_radius=15)
+    pygame.draw.rect(screen, BLUE, box_rect, 5, border_radius=15)
+    
+    if current_question_index < len(questions):
+        current_q = questions[current_question_index]
+        
+        # Desenha o texto da pergunta
+        draw_text(current_q["question"], QUESTION_FONT, BLACK, box_rect.centerx, box_rect.y + 40, center=True)
+        
+        # Desenha as opções
+        option_y_start = box_rect.y + 100
+        option_height = (box_rect.height - 120) / 4
+        
+        for i, option in enumerate(current_q["options"]):
+            option_text = f"{i+1}. {option}"
+            
+            # Cria o retângulo clicável para a opção
+            option_box = pygame.Rect(box_rect.x + 30, option_y_start + i * option_height, box_rect.width - 60, option_height - 10)
+            option_rects.append(option_box) # Salva o retângulo para detecção de clique
+            
+            # Destaca a opção se o mouse estiver sobre ela (hover)
+            pos = pygame.mouse.get_pos()
+            if option_box.collidepoint(pos):
+                pygame.draw.rect(screen, GRAY, option_box, border_radius=10)
+            else:
+                pygame.draw.rect(screen, WHITE, option_box, border_radius=10)
+                
+            pygame.draw.rect(screen, BLACK, option_box, 2, border_radius=10)
+            
+            # Desenha o texto da opção
+            draw_text(option_text, OPTION_FONT, BLACK, option_box.x + 15, option_box.centery, center_y=True)
+    else:
+        # Se as perguntas acabaram
+        draw_text("Fim de Jogo!", TITLE_FONT, BLACK, box_rect.centerx, box_rect.centery - 20, center=True, center_y=True)
+        draw_text("Pressione 'R' para reiniciar", STATS_FONT, BLACK, box_rect.centerx, box_rect.centery + 20, center=True, center_y=True)
 
 
 def setup_board():
@@ -292,26 +400,53 @@ def draw_stats_panel():
 running = True
 setup_board() 
 
+# --- LOOP PRINCIPAL MODIFICADO ---
 while running:
     
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+            
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                balls.append(Ball()) 
+            # REMOVIDO: Lançar bola com ESPAÇO
             if event.key == pygame.K_r: 
+                # Lógica de Reset atualizada
                 bin_counts = [0] * BINS
                 total_balls = 0
                 total_score = 0
                 balls.clear()
                 floating_scores.clear()
+                current_question_index = 0  # Reinicia as perguntas
+                game_state = "ASKING"       # Volta ao estado de pergunta
+                random.shuffle(questions)   # Embaralha para o próximo jogo
+                
         if event.type == pygame.MOUSEBUTTONDOWN:
-
-            for _ in range(5):
-                balls.append(Ball())
+            # Lógica de clique do mouse completamente modificada
+            
+            # Só aceita cliques se estivermos no estado "ASKING"
+            if game_state == "ASKING" and current_question_index < len(questions):
+                pos = pygame.mouse.get_pos()
+                
+                # Verifica se o clique foi em algum retângulo de opção
+                for i, rect in enumerate(option_rects):
+                    if rect.collidepoint(pos):
+                        # Resposta selecionada
+                        selected_option_index = i
+                        current_q = questions[current_question_index]
+                        
+                        # Verifica se a resposta está correta
+                        is_correct = (selected_option_index == current_q['correct'])
+                        
+                        # Lança UMA bola com o status de correta ou incorreta
+                        balls.append(Ball(is_correct=is_correct)) 
+                        
+                        # Avança para a próxima pergunta/estado
+                        current_question_index += 1
+                        game_state = "DROPPING" # Muda o estado para "bola caindo"
+                        break # Para de checar os outros retângulos
 
     
+    # --- Lógica de Update ---
     for ball in balls:
         ball.update()
         
@@ -320,26 +455,54 @@ while running:
         if score_anim.alpha == 0:
             floating_scores.remove(score_anim)
 
+    # --- Lógica de Transição de Estado ---
+    # Verifica se todas as bolas pararam de se mover
+    all_balls_inactive = all(not ball.active for ball in balls)
     
+    if game_state == "DROPPING" and all_balls_inactive and len(balls) > 0:
+        balls.clear() # Limpa a bola que terminou de cair
+        
+        if current_question_index < len(questions):
+            # Se ainda há perguntas, volta a perguntar
+            game_state = "ASKING"
+        else:
+            # Se as perguntas acabaram, fim de jogo
+            game_state = "GAME_OVER"
+
+    
+    # --- Desenho ---
     screen.fill(BG_COLOR) 
     
-    
     draw_stats_panel()
-    
-    
     draw_board()
-    
     
     for ball in balls:
         ball.draw()
         
-    
     for score_anim in floating_scores:
         score_anim.draw()
 
+    # Define a cor da pontuação baseada no valor
+    score_color = GREEN
+    if total_score < 0:
+        score_color = RED
+    elif total_score == 0:
+        score_color = WHITE
+        
+    draw_text(f"PRÊMIO TOTAL: R$ {total_score:,}", SCORE_FONT, score_color, GAME_WIDTH // 2, 20, center=True)
     
-    draw_text(f"PRÊMIO TOTAL: R$ {total_score:,}", SCORE_FONT, GREEN, GAME_WIDTH // 2, 20, center=True)
-    draw_text("Clique (5 bolas) ou ESPAÇO (1 bola)", SMALL_FONT, WHITE, GAME_WIDTH // 2, 80, center=True)
+    # --- Desenha textos de ajuda ou painel de pergunta ---
+    if game_state == "ASKING":
+        draw_text(f"Pergunta {current_question_index + 1} de {len(questions)}", SMALL_FONT, WHITE, GAME_WIDTH // 2, 80, center=True)
+        draw_question_panel() # Desenha a pergunta por cima
+    
+    elif game_state == "GAME_OVER":
+        draw_text("Fim de Jogo! Pressione 'R' para reiniciar.", TITLE_FONT, GOLD, GAME_WIDTH // 2, 80, center=True)
+    
+    elif game_state == "DROPPING":
+        # Mostra a pergunta atual (que foi respondida)
+        draw_text(f"Respondendo Pergunta {current_question_index} de {len(questions)}", SMALL_FONT, WHITE, GAME_WIDTH // 2, 80, center=True)
+
     draw_text("'R' para Resetar", SMALL_FONT, WHITE, GAME_WIDTH // 2, 100, center=True)
 
     
