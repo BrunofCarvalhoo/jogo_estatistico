@@ -560,7 +560,8 @@ while running:
                     game_state = "DROPPING" # Muda para estado "bola caindo"
 
             # --- Tecla de Reset (R) ---
-            if event.key == pygame.K_r: 
+            # Só reseta se NÃO estiver na tela de input de nome
+            if event.key == pygame.K_r and game_state != "NAME_INPUT": 
                 # Reinicia TUDO
                 bin_counts = [0] * BINS
                 total_balls = 0
