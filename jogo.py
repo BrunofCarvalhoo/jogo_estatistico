@@ -233,10 +233,10 @@ def draw_ranking_screen():
         draw_text(score, RANKING_FONT, color, WIDTH // 2 + 100, y_start + i * 45)
 
 
-# --- ADICIONA BOLAS DE TESTE ---
+#  ADICIONA BOLAS DE TESTE
 def add_test_balls(count):
-    # Solta as bolas do slot central
-    x_pos = (BINS // 2 * BIN_WIDTH) + (BIN_WIDTH / 2)
+    
+    x_pos = (current_slot * BIN_WIDTH) + (BIN_WIDTH / 2)
     # is_correct=True para bolas verdes
     for _ in range(count):
         balls.append(Ball(is_correct=True, x_start=x_pos))
@@ -367,7 +367,7 @@ class Ball:
                 
                 value_won = BIN_VALUES[bin_index]
                 
-                # A pontuação só é afetada se NÃO estivermos no modo de teste 
+                # A pontuação só é afetada se NÃO estivermos no modo de teste
                 if game_state != "TEST_MENU":
                     if self.is_correct:
                         total_score += value_won
@@ -431,7 +431,8 @@ def draw_slot_selector():
         (slot_x + 10, START_Y - 25)  
     ]
     
-    color = GREEN if last_answer_correct else RED
+    
+    color = RED if last_answer_correct is False else GREEN
     pygame.draw.polygon(screen, color, points)
     
 
@@ -549,19 +550,20 @@ def draw_stats_panel():
 
 #--- Função de Reset do Teste ---
 def reset_test_board():
-    global bin_counts, total_balls, total_score, game_state
+    global bin_counts, total_balls, total_score, game_state, current_slot 
     bin_counts = [0] * BINS
     total_balls = 0
     # Zeramos o score no modo teste
     total_score = 0 
     balls.clear()
     floating_scores.clear()
+    current_slot = BINS // 2 
     game_state = "TEST_MENU"
 
 
 #--- Função de Reset do Jogo ---
 def reset_game():
-    global bin_counts, total_balls, total_score, current_question_index, player_name, game_state
+    global bin_counts, total_balls, total_score, current_question_index, player_name, game_state, current_slot
     bin_counts = [0] * BINS
     total_balls = 0
     total_score = 0
@@ -569,6 +571,7 @@ def reset_game():
     floating_scores.clear()
     current_question_index = 0
     player_name = "" 
+    current_slot = BINS // 2 # Reseta o slot aqui também
     game_state = "NAME_INPUT" 
     random.shuffle(questions)
     load_ranking() 
@@ -626,14 +629,16 @@ while running:
                 if event.key == pygame.K_r: 
                     reset_game() 
             
-            
             elif game_state == "TEST_MENU":
                 if event.key == pygame.K_SPACE:
                     add_test_balls(1)
-                    # Não muda de estado
                 elif event.key == pygame.K_a:
                     add_test_balls(3)
-                    # Não muda de estado
+                # ### NOVO: Mover o seletor ###
+                elif event.key == pygame.K_LEFT:
+                    current_slot = max(0, current_slot - 1) 
+                elif event.key == pygame.K_RIGHT:
+                    current_slot = min(BINS - 1, current_slot + 1) 
                 elif event.key == pygame.K_ESCAPE: 
                     game_state = "MAIN_MENU"
                 elif event.key == pygame.K_r:
@@ -658,7 +663,6 @@ while running:
                 # Se clicar na área do tabuleiro
                 if pos[0] < GAME_WIDTH:
                     add_test_balls(5)
-                    # Não muda de estado
 
             elif game_state == "ASKING" and current_question_index < len(questions):
                 pos = pygame.mouse.get_pos()
@@ -718,27 +722,27 @@ while running:
         screen.fill(BG_COLOR) 
         draw_stats_panel()
         draw_board()
+
+        draw_slot_selector()
         
         for ball in balls:
             ball.draw()
             
         # Limpa as bolas inativas enquanto estamos no modo de teste
-        # para não sobrecarregar
         balls = [b for b in balls if b.active]
             
         for score_anim in floating_scores:
             score_anim.draw()
         
-        # No modo de teste, a pontuação é sempre 0
-        draw_text(f"PONTUAÇÃO: R$ 0", SCORE_FONT, WHITE, GAME_WIDTH // 2, 20, center=True)
+        draw_text(f"TESTES", SCORE_FONT, WHITE, GAME_WIDTH // 2, 20, center=True)
 
-        # Desenha as instruções de teste
-        draw_text("Modo de Teste", TITLE_FONT, GOLD, GAME_WIDTH // 2, 80, center=True)
-        #draw_text("[ESPAÇO] = 1 Bola", STATS_FONT, WHITE, GAME_WIDTH // 2, 120, center=True)
-        #draw_text("[A] = 3 Bolas", STATS_FONT, WHITE, GAME_WIDTH // 2, 150, center=True)
-        #draw_text("[CLIQUE no Tabuleiro] = 5 Bolas", STATS_FONT, WHITE, GAME_WIDTH // 2, 180, center=True)
-        draw_text("'R' para Limpar", SMALL_FONT, WHITE, GAME_WIDTH // 4, 80, center=True)
-        draw_text("'ESC' para Voltar ao Menu", SMALL_FONT, WHITE, GAME_WIDTH // 4, 100, center=True)
+        #draw_text("Modo de Teste", TITLE_FONT, GOLD, GAME_WIDTH // 2, 80, center=True)
+        #draw_text("Use as SETAS para mover", STATS_FONT, WHITE, GAME_WIDTH // 2, 120, center=True)
+        #draw_text("[ESPAÇO] = 1 Bola", STATS_FONT, WHITE, GAME_WIDTH // 2, 150, center=True)
+        #draw_text("[A] = 3 Bolas", STATS_FONT, WHITE, GAME_WIDTH // 2, 180, center=True)
+        #draw_text("[CLIQUE no Tabuleiro] = 5 Bolas", STATS_FONT, WHITE, GAME_WIDTH // 2, 210, center=True)
+        draw_text("'R' para Limpar", SMALL_FONT, WHITE, GAME_WIDTH // 2, 80, center=True)
+        draw_text("'ESC' para Voltar ao Menu", SMALL_FONT, WHITE, GAME_WIDTH // 2, 95, center=True)
 
     else:
         # --- Desenha o fundo do jogo (Tabuleiro e Estatísticas) ---
