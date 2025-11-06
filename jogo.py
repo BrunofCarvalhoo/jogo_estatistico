@@ -60,8 +60,9 @@ BIN_VALUES = [
 RANKING_FILE = "ranking.json"
 
 # --- Retângulos dos botões do menu ---
-MENU_JOGAR_RECT = pygame.Rect(WIDTH // 2 - 150, HEIGHT // 2, 300, 70)
-MENU_RANKING_RECT = pygame.Rect(WIDTH // 2 - 150, HEIGHT // 2 + 90, 300, 70)
+MENU_JOGAR_RECT = pygame.Rect(WIDTH // 2 - 150, HEIGHT // 2 - 30, 300, 70)
+MENU_RANKING_RECT = pygame.Rect(WIDTH // 2 - 150, HEIGHT // 2 + 60, 300, 70)
+MENU_TESTES_RECT = pygame.Rect(WIDTH // 2 - 150, HEIGHT // 2 + 150, 300, 70) 
 
 
 # --- Variáveis de Jogo ---
@@ -128,8 +129,7 @@ questions = [
 random.shuffle(questions)
 
 # --- Estado do Jogo ---
-#- Adicionado "MAIN_MENU" e "MENU_RANKING"
-game_state = "MAIN_MENU" # "MAIN_MENU", "NAME_INPUT", "ASKING", "SELECT_SLOT", "DROPPING", "GAME_OVER", "RANKING", "MENU_RANKING"
+game_state = "MAIN_MENU" 
 current_question_index = 0
 player_name = "" 
 current_slot = BINS // 2
@@ -171,7 +171,7 @@ def draw_name_input():
     draw_text(player_name, INPUT_FONT, BLACK, input_box.centerx, input_box.centery, center=True, center_y=True)
     
     draw_text("Pressione ENTER para começar", STATS_FONT, WHITE, WIDTH // 2, HEIGHT // 2 + 80, center=True)
-    draw_text("Pressione ESC para voltar ao Menu", SMALL_FONT, GRAY, WIDTH // 2, HEIGHT // 2 + 120, center=True) # ### NOVO ###
+    draw_text("Pressione ESC para voltar ao Menu", SMALL_FONT, GRAY, WIDTH // 2, HEIGHT // 2 + 120, center=True) 
 
 #  --- TELA DE MENU PRINCIPAL ---
 def draw_main_menu():
@@ -199,11 +199,18 @@ def draw_main_menu():
         pygame.draw.rect(screen, WHITE, MENU_RANKING_RECT, 3, border_radius=10)
         draw_text("RANKING", MENU_OPTION_FONT, WHITE, MENU_RANKING_RECT.centerx, MENU_RANKING_RECT.centery, center=True, center_y=True)
 
+    # Botão Testes
+    if MENU_TESTES_RECT.collidepoint(pos):
+        pygame.draw.rect(screen, GOLD, MENU_TESTES_RECT, border_radius=10)
+        draw_text("TESTES", MENU_OPTION_FONT, BLACK, MENU_TESTES_RECT.centerx, MENU_TESTES_RECT.centery, center=True, center_y=True)
+    else:
+        pygame.draw.rect(screen, BLUE, MENU_TESTES_RECT, border_radius=10)
+        pygame.draw.rect(screen, WHITE, MENU_TESTES_RECT, 3, border_radius=10)
+        draw_text("TESTES", MENU_OPTION_FONT, WHITE, MENU_TESTES_RECT.centerx, MENU_TESTES_RECT.centery, center=True, center_y=True)
+
 
 # --- TELA DE RANKING ---
 def draw_ranking_screen():
-    # A tela de ranking agora pode ser um overlay ou uma tela cheia
-    # Vamos fazê-la de tela cheia para ficar mais limpo
     screen.fill(BG_COLOR)
     
     draw_text("Ranking - Top 10", TITLE_FONT, GOLD, WIDTH // 2, 100, center=True)
@@ -218,13 +225,21 @@ def draw_ranking_screen():
         score = f"R$ {entry['score']:,}"
         
         color = WHITE
-        # Destaca o jogador atual APENAS se não estivermos vindo do menu
         if game_state == "RANKING" and entry['name'] == player_name and entry['score'] == total_score:
             color = GOLD 
         
         draw_text(rank, RANKING_FONT, color, WIDTH // 2 - 250, y_start + i * 45)
         draw_text(name, RANKING_FONT, color, WIDTH // 2 - 200, y_start + i * 45)
         draw_text(score, RANKING_FONT, color, WIDTH // 2 + 100, y_start + i * 45)
+
+
+# --- ADICIONA BOLAS DE TESTE ---
+def add_test_balls(count):
+    # Solta as bolas do slot central
+    x_pos = (BINS // 2 * BIN_WIDTH) + (BIN_WIDTH / 2)
+    # is_correct=True para bolas verdes
+    for _ in range(count):
+        balls.append(Ball(is_correct=True, x_start=x_pos))
 
 
 def calculate_theoretical_dist(n, total):
@@ -352,12 +367,14 @@ class Ball:
                 
                 value_won = BIN_VALUES[bin_index]
                 
-                if self.is_correct:
-                    total_score += value_won
-                    floating_scores.append(FloatingScore(self.x, self.y - 20, value_won, is_correct=True))
-                else:
-                    total_score -= value_won
-                    floating_scores.append(FloatingScore(self.x, self.y - 20, value_won, is_correct=False))
+                # A pontuação só é afetada se NÃO estivermos no modo de teste 
+                if game_state != "TEST_MENU":
+                    if self.is_correct:
+                        total_score += value_won
+                        floating_scores.append(FloatingScore(self.x, self.y - 20, value_won, is_correct=True))
+                    else:
+                        total_score -= value_won
+                        floating_scores.append(FloatingScore(self.x, self.y - 20, value_won, is_correct=False))
 
 
     def draw(self):
@@ -459,7 +476,6 @@ def draw_board():
     # --- Desenhar paredes laterais ---
     pygame.draw.line(screen, PEG_COLOR, (0, START_Y + 20), (0, bin_base_y), 3)
     pygame.draw.line(screen, PEG_COLOR, (GAME_WIDTH - 2, START_Y + 20), (GAME_WIDTH - 2, bin_base_y), 3)
-    # --- FIM DO DESENHO DAS PAREDES ---
     
     
     for i in range(BINS + 1): 
@@ -531,6 +547,18 @@ def draw_stats_panel():
         pygame.draw.line(screen, BLACK, (chart_x - 5, chart_y_teo), (chart_x + bar_width * BINS, chart_y_teo), 2)
 
 
+#--- Função de Reset do Teste ---
+def reset_test_board():
+    global bin_counts, total_balls, total_score, game_state
+    bin_counts = [0] * BINS
+    total_balls = 0
+    # Zeramos o score no modo teste
+    total_score = 0 
+    balls.clear()
+    floating_scores.clear()
+    game_state = "TEST_MENU"
+
+
 #--- Função de Reset do Jogo ---
 def reset_game():
     global bin_counts, total_balls, total_score, current_question_index, player_name, game_state
@@ -541,9 +569,9 @@ def reset_game():
     floating_scores.clear()
     current_question_index = 0
     player_name = "" 
-    game_state = "NAME_INPUT" # Volta para a tela de nome
+    game_state = "NAME_INPUT" 
     random.shuffle(questions)
-    load_ranking() # Recarrega o ranking
+    load_ranking() 
 
 
 # --- Início do Jogo ---
@@ -561,30 +589,23 @@ while running:
         # --- Lógica de Teclado (KEYDOWN) ---
         if event.type == pygame.KEYDOWN:
             
-            # --- Estado: Menu Principal ---
-            if game_state == "MAIN_MENU":
-                pass # Nenhuma tecla faz nada aqui por enquanto
-
-            # --- Estado: Ranking (visto do menu) ---
-            elif game_state == "MENU_RANKING":
-                if event.key == pygame.K_ESCAPE: # ### NOVO ### Voltar para o menu
+            if game_state == "MENU_RANKING":
+                if event.key == pygame.K_ESCAPE: 
                     game_state = "MAIN_MENU"
 
-            # --- Estado: Digitando Nome ---
             elif game_state == "NAME_INPUT":
                 if event.key == pygame.K_RETURN: 
                     if player_name.strip():
                         game_state = "ASKING"
                 elif event.key == pygame.K_BACKSPACE: 
                     player_name = player_name[:-1]
-                elif event.key == pygame.K_ESCAPE: # ### NOVO ### Voltar para o menu
+                elif event.key == pygame.K_ESCAPE: 
                     game_state = "MAIN_MENU"
-                    player_name = "" # Limpa o nome
+                    player_name = "" 
                 else:
                     if len(player_name) < 15:
                         player_name += event.unicode
             
-            # --- Estado: Selecionando Posição ---
             elif game_state == "SELECT_SLOT":
                 if event.key == pygame.K_LEFT:
                     current_slot = max(0, current_slot - 1) 
@@ -597,28 +618,48 @@ while running:
                     last_answer_correct = None 
                     game_state = "DROPPING" 
 
-            # ### MODIFICADO ### - Lógica de Reset movida para ser específica do estado
-            elif game_state == "RANKING": # Estado de ranking PÓS-JOGO
+            elif game_state == "RANKING": 
                 if event.key == pygame.K_r: 
-                    reset_game() # Reseta o jogo completo
+                    reset_game() 
             
             elif game_state in ["ASKING", "DROPPING", "SELECT_SLOT"]:
-                if event.key == pygame.K_r: # 'R' durante o jogo
-                    reset_game() # Reseta o jogo completo
-
+                if event.key == pygame.K_r: 
+                    reset_game() 
+            
+            
+            elif game_state == "TEST_MENU":
+                if event.key == pygame.K_SPACE:
+                    add_test_balls(1)
+                    # Não muda de estado
+                elif event.key == pygame.K_a:
+                    add_test_balls(3)
+                    # Não muda de estado
+                elif event.key == pygame.K_ESCAPE: 
+                    game_state = "MAIN_MENU"
+                elif event.key == pygame.K_r:
+                    reset_test_board() 
+            
 
         # --- Lógica de Clique do Mouse ---
         if event.type == pygame.MOUSEBUTTONDOWN:
             
-            # ### NOVO ### --- Cliques no Menu Principal ---
             if game_state == "MAIN_MENU":
                 pos = pygame.mouse.get_pos()
                 if MENU_JOGAR_RECT.collidepoint(pos):
                     game_state = "NAME_INPUT"
                 elif MENU_RANKING_RECT.collidepoint(pos):
                     game_state = "MENU_RANKING"
+                elif MENU_TESTES_RECT.collidepoint(pos): 
+                    reset_test_board() 
+                    game_state = "TEST_MENU"
+            
+            elif game_state == "TEST_MENU":
+                pos = pygame.mouse.get_pos()
+                # Se clicar na área do tabuleiro
+                if pos[0] < GAME_WIDTH:
+                    add_test_balls(5)
+                    # Não muda de estado
 
-            # --- Cliques na Pergunta ---
             elif game_state == "ASKING" and current_question_index < len(questions):
                 pos = pygame.mouse.get_pos()
                 
@@ -636,7 +677,7 @@ while running:
 
     
     # --- Lógica de Update ---
-    if game_state not in ["MAIN_MENU", "MENU_RANKING"]: # Não atualiza bolas se estiver no menu
+    if game_state not in ["MAIN_MENU", "MENU_RANKING"]: 
         for ball in balls:
             ball.update()
             
@@ -656,6 +697,7 @@ while running:
         else:
             game_state = "GAME_OVER"
             
+            
     if game_state == "GAME_OVER":
         save_ranking(player_name, total_score) 
         game_state = "RANKING"
@@ -663,7 +705,6 @@ while running:
 
     
     # --- Desenho ---
-    # A lógica de desenho agora depende do estado do jogo
     
     if game_state == "MAIN_MENU":
         draw_main_menu()
@@ -672,6 +713,33 @@ while running:
         draw_ranking_screen()
         draw_text("Pressione 'ESC' para voltar ao Menu", STATS_FONT, WHITE, WIDTH // 2, HEIGHT - 70, center=True)
         
+    # ### MODIFICADO: Desenho do Modo Teste (Ativo) ###
+    elif game_state == "TEST_MENU":
+        screen.fill(BG_COLOR) 
+        draw_stats_panel()
+        draw_board()
+        
+        for ball in balls:
+            ball.draw()
+            
+        # Limpa as bolas inativas enquanto estamos no modo de teste
+        # para não sobrecarregar
+        balls = [b for b in balls if b.active]
+            
+        for score_anim in floating_scores:
+            score_anim.draw()
+        
+        # No modo de teste, a pontuação é sempre 0
+        draw_text(f"PONTUAÇÃO: R$ 0", SCORE_FONT, WHITE, GAME_WIDTH // 2, 20, center=True)
+
+        # Desenha as instruções de teste
+        draw_text("Modo de Teste", TITLE_FONT, GOLD, GAME_WIDTH // 2, 80, center=True)
+        #draw_text("[ESPAÇO] = 1 Bola", STATS_FONT, WHITE, GAME_WIDTH // 2, 120, center=True)
+        #draw_text("[A] = 3 Bolas", STATS_FONT, WHITE, GAME_WIDTH // 2, 150, center=True)
+        #draw_text("[CLIQUE no Tabuleiro] = 5 Bolas", STATS_FONT, WHITE, GAME_WIDTH // 2, 180, center=True)
+        draw_text("'R' para Limpar", SMALL_FONT, WHITE, GAME_WIDTH // 4, 80, center=True)
+        draw_text("'ESC' para Voltar ao Menu", SMALL_FONT, WHITE, GAME_WIDTH // 4, 100, center=True)
+
     else:
         # --- Desenha o fundo do jogo (Tabuleiro e Estatísticas) ---
         screen.fill(BG_COLOR) 
@@ -684,12 +752,13 @@ while running:
         for score_anim in floating_scores:
             score_anim.draw()
 
-        # Desenha a pontuação total
+        # Desenha a pontuação total (para o jogo normal)
         score_color = GREEN
         if total_score < 0:
             score_color = RED
         elif total_score == 0:
             score_color = WHITE
+        
         draw_text(f"PRÊMIO TOTAL: R$ {total_score:,}", SCORE_FONT, score_color, GAME_WIDTH // 2, 20, center=True)
         
         # --- Desenha as sobreposições de estado (em cima do tabuleiro) ---
@@ -714,7 +783,7 @@ while running:
             overlay.fill(BG_COLOR)
             screen.blit(overlay, (0, 0))
             
-            draw_ranking_screen() # Desenha a tela de ranking por cima
+            draw_ranking_screen() 
             draw_text("Pressione 'R' para jogar novamente", STATS_FONT, WHITE, WIDTH // 2, HEIGHT - 70, center=True)
             
         if game_state in ["ASKING", "SELECT_SLOT", "DROPPING", "NAME_INPUT"]:
