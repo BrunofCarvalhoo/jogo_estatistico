@@ -391,23 +391,80 @@ def draw_question_panel():
     overlay.fill(BG_COLOR)
     screen.blit(overlay, (0, 0))
     
-    box_rect = pygame.Rect(GAME_WIDTH // 4 - 50, HEIGHT // 4, GAME_WIDTH // 2 + 100, HEIGHT // 2 + 50)
+    # --- CAIXA MAIOR (COMO SOLICITADO) E CENTRALIZADA ---
+    # Aumentei a largura (de 500 para 550) e altura (de 400 para 450)
+    box_width = GAME_WIDTH // 2 + 150
+    box_height = HEIGHT // 2 + 100
+    box_x = (GAME_WIDTH - box_width) // 2
+    box_y = (HEIGHT - box_height) // 2 - 25 # Um pouco mais para cima
+    
+    box_rect = pygame.Rect(box_x, box_y, box_width, box_height)
     pygame.draw.rect(screen, LIGHT_GRAY, box_rect, border_radius=15)
     pygame.draw.rect(screen, BLUE, box_rect, 5, border_radius=15)
     
     if current_question_index < len(questions):
         current_q = questions[current_question_index]
         
-        draw_text(current_q["question"], QUESTION_FONT, GOLD, box_rect.centerx, box_rect.y + 40, center=True)
+        # --- INÍCIO DA LÓGICA DE QUEBRA DE LINHA (WORD-WRAP) ---
+        question_text = current_q["question"]
+        words = question_text.split(' ')
+        lines = []
+        current_line = ""
         
-        option_y_start = box_rect.y + 100
-        option_height = (box_rect.height - 120) / 4
+        # Margem de 40px (20 de cada lado)
+        max_width = box_rect.width - 40 
         
+        for word in words:
+            # Testa a largura da linha com a nova palavra
+            test_line = current_line + word + " "
+            try:
+                line_surface = QUESTION_FONT.render(test_line, True, BLACK)
+                line_width = line_surface.get_width()
+            except pygame.error:
+                line_width = max_width # Evita erro se a fonte não puder renderizar
+        
+            if line_width <= max_width:
+                # Palavra cabe, continua na linha
+                current_line = test_line
+            else:
+                # Palavra não cabe, finaliza a linha anterior (sem espaço extra)
+                lines.append(current_line.strip())
+                # Começa uma nova linha com a palavra atual
+                current_line = word + " "
+        
+        # Adiciona a última linha
+        lines.append(current_line.strip())
+        
+        # Desenha as linhas quebadas
+        current_y = box_rect.y + 30 # Y inicial (com uma margem de 30px)
+        line_height = QUESTION_FONT.get_linesize() # Pega a altura da fonte
+        
+        for line in lines:
+            draw_text(line, QUESTION_FONT, BLACK, box_rect.centerx, current_y, center=True)
+            current_y += line_height # Move para a próxima linha
+        # --- FIM DA LÓGICA DE QUEBRA DE LINHA ---
+
+        # --- Opções ---
+        # Y fixo para as opções, dando 150px de espaço para a pergunta (de 30 até 180)
+        option_y_start = box_rect.y + 150 
+        
+        # Calcula a altura de cada opção com base no espaço restante
+        available_height_for_options = (box_rect.y + box_rect.height) - option_y_start - 20 # 20px margem inferior
+        option_height = (available_height_for_options / 4) - 10 # -10 para dar espaço entre elas
+        
+        if option_height > 70: # Limita a altura máxima da opção
+            option_height = 70
+        elif option_height < 40: # Limite mínimo
+             option_height = 40
+
         for i, option in enumerate(current_q["options"]):
             option_text = f"{i+1}. {option}"
             
-            option_box = pygame.Rect(box_rect.x + 30, option_y_start + i * option_height, box_rect.width - 60, option_height - 10)
-            option_rects.append(option_box) 
+            # Recalcula a altura da caixa da opção
+            option_box_y = option_y_start + i * (option_height + 10) # 10px de espaço
+            
+            option_box = pygame.Rect(box_rect.x + 30, option_box_y, box_rect.width - 60, option_height)
+            option_rects.append(option_box)
             
             pos = pygame.mouse.get_pos()
             if option_box.collidepoint(pos):
