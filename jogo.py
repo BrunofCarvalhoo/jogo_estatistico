@@ -391,7 +391,7 @@ def draw_question_panel():
     overlay.fill(BG_COLOR)
     screen.blit(overlay, (0, 0))
     
-    # --- CAIXA MAIOR (COMO SOLICITADO) E CENTRALIZADA ---
+    
     # Aumentei a largura (de 500 para 550) e altura (de 400 para 450)
     box_width = GAME_WIDTH // 2 + 150
     box_height = HEIGHT // 2 + 100
